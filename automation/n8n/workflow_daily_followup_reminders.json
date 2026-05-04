@@ -1,0 +1,82 @@
+{
+  "name": "Internship CRM - Daily Follow-up Reminders",
+  "nodes": [
+    {
+      "id": "cron",
+      "name": "Daily 09:00",
+      "type": "n8n-nodes-base.cron",
+      "position": [220, 300],
+      "parameters": {
+        "rule": {"hour": 9, "minute": 0}
+      }
+    },
+    {
+      "id": "read_rows",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [440, 300],
+      "parameters": {
+        "operation": "read",
+        "sheetName": "Leads",
+        "range": "A:T"
+      }
+    },
+    {
+      "id": "due_today",
+      "name": "Due Today?",
+      "type": "n8n-nodes-base.if",
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {"value1": "={{$json.followup_date}}", "operation": "equals", "value2": "={{$now.toISODate()}}"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "status_filter",
+      "name": "No Reply Yet?",
+      "type": "n8n-nodes-base.if",
+      "position": [920, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {"value1": "={{$json.status}}", "operation": "notEqual", "value2": "replied"},
+            {"value1": "={{$json.status}}", "operation": "notEqual", "value2": "interview"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "build_text",
+      "name": "Build Reminder Text",
+      "type": "n8n-nodes-base.code",
+      "position": [1140, 300],
+      "parameters": {
+        "jsCode": "return items.map(i => {\n  i.json.reminder = `Follow up with ${i.json.contact_name} (${i.json.contact_title}) at ${i.json.company}. Email: ${i.json.email || 'n/a'}. LinkedIn: ${i.json.linkedin_url || 'n/a'}`;\n  return i;\n});"
+      }
+    },
+    {
+      "id": "send_email",
+      "name": "Send Reminder Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1360, 300],
+      "parameters": {
+        "operation": "send",
+        "subject": "Internship Follow-up Reminder",
+        "message": "={{$json.reminder}}",
+        "to": "your_email@example.com"
+      }
+    }
+  ],
+  "connections": {
+    "Daily 09:00": {"main": [[{"node": "Read Leads", "type": "main", "index": 0}]]},
+    "Read Leads": {"main": [[{"node": "Due Today?", "type": "main", "index": 0}]]},
+    "Due Today?": {"main": [[{"node": "No Reply Yet?", "type": "main", "index": 0}], []]},
+    "No Reply Yet?": {"main": [[{"node": "Build Reminder Text", "type": "main", "index": 0}], []]},
+    "Build Reminder Text": {"main": [[{"node": "Send Reminder Email", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "version": "1.0"
+}
