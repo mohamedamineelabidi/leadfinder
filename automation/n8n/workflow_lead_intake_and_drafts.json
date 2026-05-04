@@ -1,0 +1,108 @@
+{
+  "name": "Internship CRM - Lead Intake + Draft Messages",
+  "nodes": [
+    {
+      "id": "manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "sheets_read",
+      "name": "Read New Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [420, 300],
+      "parameters": {
+        "operation": "read",
+        "sheetName": "Leads",
+        "range": "A:T"
+      },
+      "notes": "Filter rows where status is 'new' and contact_name exists."
+    },
+    {
+      "id": "filter_new",
+      "name": "Filter New",
+      "type": "n8n-nodes-base.if",
+      "position": [640, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equals",
+              "value2": "new"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "openai_drafts",
+      "name": "Generate Drafts",
+      "type": "n8n-nodes-base.openAi",
+      "position": [880, 240],
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-4.1-mini",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You write concise, personalized internship outreach messages."
+          },
+          {
+            "role": "user",
+            "content": "Generate JSON with keys linkedin_message and email_message for this lead: {{$json.contact_name}}, {{$json.contact_title}}, {{$json.company}}, target role {{$json.target_role}}, notes {{$json.notes}}. Keep LinkedIn <= 80 words, email <= 160 words."
+          }
+        ]
+      }
+    },
+    {
+      "id": "set_followup",
+      "name": "Set Follow-up Date",
+      "type": "n8n-nodes-base.code",
+      "position": [1100, 240],
+      "parameters": {
+        "jsCode": "const now = new Date();\nnow.setDate(now.getDate() + 4);\nconst f = now.toISOString().slice(0,10);\nreturn items.map(item => {\n  const msg = JSON.parse(item.json.message || '{\"linkedin_message\":\"\",\"email_message\":\"\"}');\n  item.json.msg_linkedin = msg.linkedin_message;\n  item.json.msg_email = msg.email_message;\n  item.json.followup_date = f;\n  item.json.last_action = 'draft_generated';\n  return item;\n});"
+      }
+    },
+    {
+      "id": "sheets_update",
+      "name": "Update Lead Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1320, 240],
+      "parameters": {
+        "operation": "update",
+        "sheetName": "Leads",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "msg_linkedin": "={{$json.msg_linkedin}}",
+            "msg_email": "={{$json.msg_email}}",
+            "followup_date": "={{$json.followup_date}}",
+            "last_action": "={{$json.last_action}}"
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{"node": "Read New Leads", "type": "main", "index": 0}]]
+    },
+    "Read New Leads": {
+      "main": [[{"node": "Filter New", "type": "main", "index": 0}]]
+    },
+    "Filter New": {
+      "main": [[{"node": "Generate Drafts", "type": "main", "index": 0}], []]
+    },
+    "Generate Drafts": {
+      "main": [[{"node": "Set Follow-up Date", "type": "main", "index": 0}]]
+    },
+    "Set Follow-up Date": {
+      "main": [[{"node": "Update Lead Row", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "version": "1.0"
+}
